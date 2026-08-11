@@ -89,10 +89,6 @@ definitions. */
 	#error freertos_risc_v_chip_specific_extensions.h must define portasmHAS_MTIME to either 1 (MTIME clock present) or 0 (MTIME clock not present).  See https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
 #endif
 
-#ifndef portasmHANDLE_INTERRUPT /* don't need this define */
-#	#error portasmHANDLE_INTERRUPT must be defined to the function to be called to handle external/peripheral interrupts.  portasmHANDLE_INTERRUPT can be defined on the assembler command line or in the appropriate freertos_risc_v_chip_specific_extensions.h header file.  https://www.FreeRTOS.org/Using-FreeRTOS-on-RISC-V.html
-#endif
-
 #ifndef portasmHAS_SIFIVE_CLINT
 	#define portasmHAS_SIFIVE_CLINT 0
 #endif
@@ -214,15 +210,11 @@ processed_source:
 .func
 xPortStartFirstTask:
 
-/* if it is an assembly entry code, the SP offset value is determined by the assembly code,
-but the C code is determined by the compiler, so we subtract 512 here as a reservation.
-When entering the interrupt function of C code, the compiler automatically presses the stack
-into the task stack. We can only change the SP value used by the calling function after switching
-the interrupt stack.This problem can be solved by modifying the interrupt to the assembly entry,
-and there is no need to reserve 512 bytes. You only need to switch the interrupt stack at the
-beginning of the interrupt function */
+/* SysTick0_Handler uses WCH-Interrupt-fast (HPE handles prologue/epilogue),
+so the C function body starts immediately with GET_INT_SP() as the first
+statement. No compiler-generated stack operations occur before the sp swap,
+so mscratch can point directly at xISRStackTop without reserving 512 bytes. */
 	lw t0, xISRStackTop
-	addi t0, t0, -512
     csrw mscratch,t0
 
 	load_x  sp, pxCurrentTCB			/* Load pxCurrentTCB. */
@@ -337,7 +329,7 @@ pxPortInitialiseStack:
 
 	csrr t0, mstatus					/* Obtain current mstatus value. */
 	andi t0, t0, ~0x8					/* Ensure interrupts are disabled when the stack is restored within an ISR.  Required when a task is created after the schedulre has been started, otherwise interrupts would be disabled anyway. */
-	addi t1, x0, 0x788					/* Generate the value 0x7880, which are the MPIE, MPP and FS bits to set in mstatus. */
+	addi t1, x0, 0x188					/* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus (FS=0, FPU off since ARCH_FPU=0). */
 	slli t1, t1, 4
 	or t0, t0, t1						/* Set MPIE and MPP bits in mstatus value. */
 

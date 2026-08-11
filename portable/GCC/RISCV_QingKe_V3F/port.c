@@ -160,11 +160,11 @@ void vPortSetupTimerInterrupt(void) {
     SysTick->CTLR = 0;
     SysTick->ISR = 0;
     SysTick->CNT = 0;
-    SysTick->CMP = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+    SysTick->CMP = (configCPU_CLOCK_HZ / configTICK_RATE_HZ) - 1;
     SysTick->CTLR = 0xf;
 }
 
-#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIME_BASE_ADDRESS != 0 ) */
+#endif /* ( configMTIME_BASE_ADDRESS != 0 ) && ( configMTIMECMP_BASE_ADDRESS != 0 ) */
 /*-----------------------------------------------------------*/
 
 BaseType_t xPortStartScheduler(void) {
@@ -237,8 +237,8 @@ void SysTick0_Handler(void) {
     SysTick->ISR = 0;
     if (xTaskIncrementTick() != pdFALSE)
         portYIELD();
-    portENABLE_INTERRUPTS();
     FREE_INT_SP();
+    portENABLE_INTERRUPTS();
 }
 
 /*-----------------------------------------------------------*/
@@ -259,13 +259,13 @@ void vPortExitCritical(void) {
 /*-----------------------------------------------------------*/
 portUBASE_TYPE xPortSetInterruptMask(void) {
     portUBASE_TYPE uvalue = 0;
-    __asm volatile("csrrw %0, mstatus, %1":"=r"(uvalue):"r"(0x7800));
+    __asm volatile("csrrci %0, mstatus, 0x8":"=r"(uvalue));
     return uvalue;
 }
 
 /*-----------------------------------------------------------*/
 void vPortClearInterruptMask(portUBASE_TYPE uvalue) {
-    __asm volatile("csrw  mstatus, %0"::"r"(uvalue));
+    __asm volatile("csrs  mstatus, %0"::"r"(uvalue & 0x8));
 }
 
 
